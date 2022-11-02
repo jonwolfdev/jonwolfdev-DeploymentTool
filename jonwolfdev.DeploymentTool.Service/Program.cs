@@ -7,8 +7,8 @@ Console.WriteLine("jonwolfdev Deployment Tool");
 // TODO: add host service
 // TODO: add model validation
 // TODO: add logging and send email for failed or success
-
-// dotnet run /home/jon/Downloads/test-deployment.json
+// TODO: stop execution if one command fails
+// sudo dotnet run /home/jon/Downloads/test-deployment.json
 if(args.Length == 0){
     throw new InvalidOperationException("You have to specify the json file location. As the first argument");
 }
@@ -20,15 +20,30 @@ if(string.IsNullOrWhiteSpace(jsonFileLocation))
 
 var contents = await File.ReadAllTextAsync(jsonFileLocation);
 
+
 var details = JsonConvert.DeserializeObject<DeploymentDetailsModel>(contents);
 
 if(details is null){
     throw new InvalidOperationException("details is null");
 }
 details.Validate();
-details.Transform(new Dictionary<string, string>());
+details.Transform(new Dictionary<string, string>(){
+    {"_date", DateTime.Now.ToString("yyyy-MM-dd")},
+    {"_guid", Guid.NewGuid().ToString()},
+
+    // TODO: these should be different
+    {"homeFolderName", "jon"},
+    {"appWwwFolder", "sk-api"},
+    {"dbName", "testtool"},
+    {"appServiceName", "ssh"},
+});
 
 foreach(var cmd in details.Commands){
+
+    if(cmd.Filename.StartsWith("jwd-task")){
+        continue;
+    }
+
     var psi = new ProcessStartInfo();
     
     psi.FileName = cmd.Filename;
@@ -40,8 +55,12 @@ foreach(var cmd in details.Commands){
     psi.UseShellExecute = false;
     psi.CreateNoWindow = true;
     
+    Console.WriteLine($"=== Starting process {cmd.Title}");
+    Console.WriteLine($"`{cmd.WorkingDir}` `{cmd.Filename}` `{cmd.Arguments}`");
 
-    Console.WriteLine($"=== Starting process `{cmd.WorkingDir}` `{cmd.Filename}` `{cmd.Arguments}`");
+    if(details.PauseBeforeProcessExec)
+        Console.ReadLine();
+    
     using var process = Process.Start(psi);
     if(process is null)
         throw new InvalidOperationException($"Couldn't create process: {psi.FileName} {psi.Arguments}");
@@ -55,8 +74,6 @@ foreach(var cmd in details.Commands){
     //     throw new InvalidOperationException("Process wrote to error output");
     // }
 
-    Console.WriteLine("=== End process");
     Console.WriteLine();
-
 }
 

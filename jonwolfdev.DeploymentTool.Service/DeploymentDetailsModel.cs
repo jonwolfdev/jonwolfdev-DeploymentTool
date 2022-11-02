@@ -1,9 +1,11 @@
 
 public class DeploymentDetailsModel
 {
+    public bool PauseBeforeProcessExec {get;set;} = true;
     public uint Version {get;set;}
     public Dictionary<string,string> Variables {get;set;} = new();
 
+    public List<string> Secrets {get;set;} = new();
     public List<DeploymentDetailsCommandModel> Commands {get;set;} = new();
 
     public void Validate(){
@@ -22,10 +24,25 @@ public class DeploymentDetailsModel
 
     public void Transform(Dictionary<string,string> ExtraVars){
         foreach(var var in ExtraVars){
-            if(!Variables.TryAdd(var.Key, var.Key)){
+            foreach(var varToModify in Variables){
+                var replaceKey = $"$({var.Key})";
+                Variables[varToModify.Key] = varToModify.Value.Replace(replaceKey, var.Value);
+            }
+        }
+
+        foreach(var var in Variables){
+            if(var.Value.Contains("$(")){
+                throw new InvalidOperationException($"Arguments: {var.Key} {var.Value} still has `$(` Check if variable exists");
+            }
+        }
+
+        foreach(var var in ExtraVars){
+            if(!Variables.TryAdd(var.Key, var.Value)){
                 throw new InvalidOperationException($"Can't insert {var.Key} {var.Value}");
             }
         }
+
+        
 
         foreach(var cmd in Commands){
             cmd.Transform(Variables);
@@ -35,11 +52,16 @@ public class DeploymentDetailsModel
 
 public class DeploymentDetailsCommandModel
 {
+    public string Title {get;set;} = string.Empty;
     public string Filename {get;set;} = string.Empty;
     public string Arguments {get;set;} = string.Empty;
     public string WorkingDir {get;set;} = string.Empty;
 
     public void Validate(){
+        if(string.IsNullOrWhiteSpace(Title)){
+            throw new InvalidOperationException("Title is null or empty");
+        }
+
         if(string.IsNullOrWhiteSpace(Filename)){
             throw new InvalidOperationException("Filename is null or empty");
         }
@@ -60,6 +82,7 @@ public class DeploymentDetailsCommandModel
             WorkingDir = WorkingDir.Replace(replaceKey, var.Value);
         }
 
+        // TODO: it would be better a regex `$(*)`
         if(Arguments.Contains("$(")){
             throw new InvalidOperationException($"Arguments: {Arguments} still has `$(` Check if variable exists");
         }
