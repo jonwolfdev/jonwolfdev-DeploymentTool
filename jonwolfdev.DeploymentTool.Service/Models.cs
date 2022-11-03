@@ -1,14 +1,22 @@
 
-public class DeploymentDetailsModel
+public class SecretsModel
 {
+    public Dictionary<string,string> Values {get;set;} = new();
+}
+public class DeploymentModel
+{
+    public string Title {get;set;} = string.Empty;
     public bool PauseBeforeProcessExec {get;set;} = true;
     public uint Version {get;set;}
-    public Dictionary<string,string> Variables {get;set;} = new();
+    public Dictionary<string,string>[] Variables {get;set;} = new Dictionary<string, string>[]{};
 
     public List<string> Secrets {get;set;} = new();
-    public List<DeploymentDetailsCommandModel> Commands {get;set;} = new();
+    public List<DeploymentCommandModel> Commands {get;set;} = new();
 
     public void Validate(){
+        if(string.IsNullOrWhiteSpace(Title)){
+            throw new InvalidOperationException("Title has an invalid value");
+        }
         if(Version <= 0){
             throw new InvalidOperationException("version has an invalid value");
         }
@@ -23,34 +31,57 @@ public class DeploymentDetailsModel
     }
 
     public void Transform(Dictionary<string,string> ExtraVars){
-        foreach(var var in ExtraVars){
-            foreach(var varToModify in Variables){
-                var replaceKey = $"$({var.Key})";
-                Variables[varToModify.Key] = varToModify.Value.Replace(replaceKey, var.Value);
-            }
-        }
+        var transformedVariables = new Dictionary<string,string>();
 
-        foreach(var var in Variables){
-            if(var.Value.Contains("$(")){
-                throw new InvalidOperationException($"Arguments: {var.Key} {var.Value} still has `$(` Check if variable exists");
-            }
-        }
+        foreach(var phase in Variables){
+            var localdict = new Dictionary<string,string>(phase);
 
-        foreach(var var in ExtraVars){
-            if(!Variables.TryAdd(var.Key, var.Value)){
-                throw new InvalidOperationException($"Can't insert {var.Key} {var.Value}");
+            // Transform first with extra vars
+            foreach(var var in ExtraVars){
+                foreach(var varToModify in localdict){
+                    var replaceKey = $"$({var.Key})";
+                    localdict[varToModify.Key] = varToModify.Value.Replace(replaceKey, var.Value);
+                }
+            }
+
+            // Transform with previous phase
+            foreach(var var in transformedVariables){
+                foreach(var varToModify in localdict){
+                    var replaceKey = $"$({var.Key})";
+                    localdict[varToModify.Key] = varToModify.Value.Replace(replaceKey, var.Value);
+                }
+            }
+
+            // Add or replace into our collection (old key values will be replaced with the new ones)
+            foreach(var var in localdict){
+                transformedVariables[var.Key] = var.Value;
             }
         }
 
         
 
+        foreach(var var in transformedVariables){
+            if(var.Value.Contains("$(")){
+                throw new InvalidOperationException($"Variable: {var.Key} {var.Value} still has `$(` Check if variable exists");
+            }
+        }
+
+        foreach(var var in ExtraVars){
+            transformedVariables[var.Key] = var.Value;
+        }
+
+        foreach(var var in transformedVariables){
+            Console.WriteLine($"{var.Key} = {var.Value}");
+        }
+        Console.ReadLine();
+
         foreach(var cmd in Commands){
-            cmd.Transform(Variables);
+            cmd.Transform(transformedVariables);
         }
     }
 }
 
-public class DeploymentDetailsCommandModel
+public class DeploymentCommandModel
 {
     public string Title {get;set;} = string.Empty;
     public string Filename {get;set;} = string.Empty;

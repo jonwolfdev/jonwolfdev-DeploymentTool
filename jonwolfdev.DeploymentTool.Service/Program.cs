@@ -1,6 +1,7 @@
 ﻿// See https://aka.ms/new-console-template for more information
 using System.Diagnostics;
 using Newtonsoft.Json;
+using Microsoft.Extensions.Configuration;
 
 Console.WriteLine("jonwolfdev Deployment Tool");
 
@@ -20,14 +21,24 @@ if(string.IsNullOrWhiteSpace(jsonFileLocation))
 
 var contents = await File.ReadAllTextAsync(jsonFileLocation);
 
+var deployment = JsonConvert.DeserializeObject<DeploymentModel>(contents);
 
-var details = JsonConvert.DeserializeObject<DeploymentDetailsModel>(contents);
-
-if(details is null){
+if(deployment is null){
     throw new InvalidOperationException("details is null");
 }
-details.Validate();
-details.Transform(new Dictionary<string, string>(){
+
+var config = new ConfigurationBuilder()
+    .AddJsonFile("secrets.json")
+    .Build();
+
+//var secrets = config.GetSection(nameof(SecretsModel)).get;
+
+Console.WriteLine($"Deployment: {deployment.Title}");
+Console.Write("Press enter to confirm");
+Console.ReadLine();
+
+deployment.Validate();
+deployment.Transform(new Dictionary<string, string>(){
     {"_date", DateTime.Now.ToString("yyyy-MM-dd")},
     {"_guid", Guid.NewGuid().ToString()},
 
@@ -38,7 +49,7 @@ details.Transform(new Dictionary<string, string>(){
     {"appServiceName", "ssh"},
 });
 
-foreach(var cmd in details.Commands){
+foreach(var cmd in deployment.Commands){
 
     if(cmd.Filename.StartsWith("jwd-task")){
         continue;
@@ -58,7 +69,7 @@ foreach(var cmd in details.Commands){
     Console.WriteLine($"=== Starting process {cmd.Title}");
     Console.WriteLine($"`{cmd.WorkingDir}` `{cmd.Filename}` `{cmd.Arguments}`");
 
-    if(details.PauseBeforeProcessExec)
+    if(deployment.PauseBeforeProcessExec)
         Console.ReadLine();
     
     using var process = Process.Start(psi);
