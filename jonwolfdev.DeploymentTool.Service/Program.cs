@@ -27,26 +27,23 @@ if(deployment is null){
     throw new InvalidOperationException("details is null");
 }
 
+// TODO: use azure key vault or something
 var config = new ConfigurationBuilder()
     .AddJsonFile("secrets.json")
     .Build();
 
-//var secrets = config.GetSection(nameof(SecretsModel)).get;
+var secrets = config.GetSection(nameof(Secrets)).Get<Secrets>();
 
 Console.WriteLine($"Deployment: {deployment.Title}");
+Console.WriteLine($"# Secrets: {secrets.Values.Count}");
+Console.WriteLine($"Dry run: {deployment.DryRun}");
 Console.Write("Press enter to confirm");
 Console.ReadLine();
 
 deployment.Validate();
-deployment.Transform(new Dictionary<string, string>(){
+deployment.Transform(new Dictionary<string, string>(secrets.Values){
     {"_date", DateTime.Now.ToString("yyyy-MM-dd")},
-    {"_guid", Guid.NewGuid().ToString()},
-
-    // TODO: these should be different
-    {"homeFolderName", "jon"},
-    {"appWwwFolder", "sk-api"},
-    {"dbName", "testtool"},
-    {"appServiceName", "ssh"},
+    {"_guid", Guid.NewGuid().ToString()}
 });
 
 foreach(var cmd in deployment.Commands){
@@ -72,19 +69,20 @@ foreach(var cmd in deployment.Commands){
     if(deployment.PauseBeforeProcessExec)
         Console.ReadLine();
     
+    if(deployment.DryRun)
+        continue;
+
     using var process = Process.Start(psi);
     if(process is null)
         throw new InvalidOperationException($"Couldn't create process: {psi.FileName} {psi.Arguments}");
 
     await process.WaitForExitAsync();
-    //var output = await process.StandardOutput.ReadToEndAsync();
-    //var err = process.StandardError.ReadToEnd();
-    //Console.WriteLine("Output: " + output);
-    //Console.WriteLine("Error: " + err);
-    // if(!string.IsNullOrEmpty(err) && err.Length > 0){
-    //     throw new InvalidOperationException("Process wrote to error output");
-    // }
+    // var output = await process.StandardOutput.ReadToEndAsync();
+    // var err = await process.StandardError.ReadToEndAsync();
+    // Console.WriteLine("Output: " + output);
+    // Console.WriteLine("Error: " + err);
 
     Console.WriteLine();
 }
-
+Console.WriteLine("Finished. Press enter to exit...");
+Console.ReadLine();

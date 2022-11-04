@@ -1,5 +1,5 @@
 
-public class SecretsModel
+public class Secrets
 {
     public Dictionary<string,string> Values {get;set;} = new();
 }
@@ -7,6 +7,7 @@ public class DeploymentModel
 {
     public string Title {get;set;} = string.Empty;
     public bool PauseBeforeProcessExec {get;set;} = true;
+    public bool DryRun {get;set;} = false;
     public uint Version {get;set;}
     public Dictionary<string,string>[] Variables {get;set;} = new Dictionary<string, string>[]{};
 
@@ -30,19 +31,11 @@ public class DeploymentModel
         }
     }
 
-    public void Transform(Dictionary<string,string> ExtraVars){
+    public void Transform(Dictionary<string,string> extraVars){
         var transformedVariables = new Dictionary<string,string>();
 
         foreach(var phase in Variables){
             var localdict = new Dictionary<string,string>(phase);
-
-            // Transform first with extra vars
-            foreach(var var in ExtraVars){
-                foreach(var varToModify in localdict){
-                    var replaceKey = $"$({var.Key})";
-                    localdict[varToModify.Key] = varToModify.Value.Replace(replaceKey, var.Value);
-                }
-            }
 
             // Transform with previous phase
             foreach(var var in transformedVariables){
@@ -58,25 +51,27 @@ public class DeploymentModel
             }
         }
 
-        
-
-        foreach(var var in transformedVariables){
-            if(var.Value.Contains("$(")){
-                throw new InvalidOperationException($"Variable: {var.Key} {var.Value} still has `$(` Check if variable exists");
+        // Transform with extra vars
+        foreach(var var in extraVars){
+            foreach(var varToModify in transformedVariables){
+                var replaceKey = $"#({var.Key})";
+                transformedVariables[varToModify.Key] = varToModify.Value.Replace(replaceKey, var.Value);
             }
         }
 
-        foreach(var var in ExtraVars){
-            transformedVariables[var.Key] = var.Value;
+        foreach(var var in transformedVariables){
+            if(var.Value.Contains("$(") || var.Value.Contains("#(")){
+                throw new InvalidOperationException($"Variable: {var.Key} {var.Value} still has `$(` or `#(` Check if variable exists");
+            }
         }
 
-        foreach(var var in transformedVariables){
-            Console.WriteLine($"{var.Key} = {var.Value}");
-        }
-        Console.ReadLine();
+        // foreach(var var in transformedVariables){
+        //     Console.WriteLine($"{var.Key} = {var.Value}");
+        // }
+        // Console.ReadLine();
 
         foreach(var cmd in Commands){
-            cmd.Transform(transformedVariables);
+            cmd.Transform(transformedVariables, extraVars);
         }
     }
 }
@@ -106,19 +101,25 @@ public class DeploymentCommandModel
         }
     }
 
-    public void Transform(Dictionary<string,string> vars){
+    public void Transform(Dictionary<string,string> vars, Dictionary<string, string> extraVars){
         foreach(var var in vars){
             var replaceKey = $"$({var.Key})";
             Arguments = Arguments.Replace(replaceKey, var.Value);
             WorkingDir = WorkingDir.Replace(replaceKey, var.Value);
         }
 
-        // TODO: it would be better a regex `$(*)`
-        if(Arguments.Contains("$(")){
-            throw new InvalidOperationException($"Arguments: {Arguments} still has `$(` Check if variable exists");
+        foreach(var var in extraVars){
+            var replaceKey = $"#({var.Key})";
+            Arguments = Arguments.Replace(replaceKey, var.Value);
+            WorkingDir = WorkingDir.Replace(replaceKey, var.Value);
         }
-        if(WorkingDir.Contains("$(")){
-            throw new InvalidOperationException($"WorkingDir: {WorkingDir} still has `$(` Check if variable exists");
+
+        // TODO: it would be better a regex `$(*)`
+        if(Arguments.Contains("$(") || Arguments.Contains("#(")){
+            throw new InvalidOperationException($"Arguments: {Arguments} still has `$(` or `#(` Check if variable exists");
+        }
+        if(WorkingDir.Contains("$(") || WorkingDir.Contains("#(")){
+            throw new InvalidOperationException($"WorkingDir: {WorkingDir} still has `$(` or `#(` Check if variable exists");
         }
     }
 }
