@@ -2,23 +2,26 @@
 using System.Diagnostics;
 using Newtonsoft.Json;
 using Microsoft.Extensions.Configuration;
+using jonwolfdev.DeploymentTool.Service;
 
 Console.WriteLine("jonwolfdev Deployment Tool");
 
-if(args.Length == 0){
+if (args.Length == 0)
+{
     throw new InvalidOperationException("You have to specify the json file location. As the first argument");
 }
 
 var jsonFileLocation = args[0];
 
-if(string.IsNullOrWhiteSpace(jsonFileLocation))
+if (string.IsNullOrWhiteSpace(jsonFileLocation))
     throw new InvalidOperationException("You have to specify the json file location. As the first argument");
 
 var contents = await File.ReadAllTextAsync(jsonFileLocation);
 
 var deployment = JsonConvert.DeserializeObject<DeploymentModel>(contents);
 
-if(deployment is null){
+if (deployment is null)
+{
     throw new InvalidOperationException("details is null");
 }
 
@@ -42,34 +45,37 @@ deployment.Transform(new Dictionary<string, string>(secrets.Values){
     {"_guid", Guid.NewGuid().ToString()}
 });
 
-foreach(var cmd in deployment.Commands){
+foreach (var cmd in deployment.Commands)
+{
 
-    if(cmd.Filename.StartsWith("jwd-task")){
+    if (cmd.Filename.StartsWith("jwd-task"))
+    {
         continue;
     }
 
-    var psi = new ProcessStartInfo();
-    
-    psi.FileName = cmd.Filename;
-    psi.Arguments = cmd.Arguments;
-    psi.WorkingDirectory = cmd.WorkingDir;
+    var psi = new ProcessStartInfo
+    {
+        FileName = cmd.Filename,
+        Arguments = cmd.Arguments,
+        WorkingDirectory = cmd.WorkingDir,
 
-    psi.RedirectStandardOutput = false;
-    psi.RedirectStandardError = false;
-    psi.UseShellExecute = false;
-    psi.CreateNoWindow = true;
-    
+        RedirectStandardOutput = false,
+        RedirectStandardError = false,
+        UseShellExecute = false,
+        CreateNoWindow = true
+    };
+
     Console.WriteLine($"=== Starting process {cmd.Title}");
     Console.WriteLine($"`{cmd.WorkingDir}` `{cmd.Filename}` `{cmd.Arguments}`");
 
-    if(deployment.PauseBeforeProcessExec)
+    if (deployment.PauseBeforeProcessExec)
         Console.ReadLine();
-    
-    if(deployment.DryRun)
+
+    if (deployment.DryRun)
         continue;
 
     using var process = Process.Start(psi);
-    if(process is null)
+    if (process is null)
         throw new InvalidOperationException($"Couldn't create process: {psi.FileName} {psi.Arguments}");
 
     await process.WaitForExitAsync();
