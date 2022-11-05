@@ -70,7 +70,13 @@ public class DeploymentModel
         // }
         // Console.ReadLine();
 
+        var checkUnique = new HashSet<string>();
         foreach(var cmd in Commands){
+            if(checkUnique.Contains(cmd.Title)){
+                throw new InvalidOperationException($"Cannot have duplicate titles: {cmd.Title}");
+            }
+            checkUnique.Add(cmd.Title);
+            
             cmd.Transform(transformedVariables, extraVars);
         }
     }

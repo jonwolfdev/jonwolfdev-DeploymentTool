@@ -5,11 +5,6 @@ using Microsoft.Extensions.Configuration;
 
 Console.WriteLine("jonwolfdev Deployment Tool");
 
-// TODO: add host service
-// TODO: add model validation
-// TODO: add logging and send email for failed or success
-// TODO: stop execution if one command fails
-// sudo dotnet run /home/jon/Downloads/test-deployment.json
 if(args.Length == 0){
     throw new InvalidOperationException("You have to specify the json file location. As the first argument");
 }
@@ -35,9 +30,10 @@ var config = new ConfigurationBuilder()
 var secrets = config.GetSection(nameof(Secrets)).Get<Secrets>();
 
 Console.WriteLine($"Deployment: {deployment.Title}");
-Console.WriteLine($"# Secrets: {secrets.Values.Count}");
+Console.WriteLine($"Secrets: {secrets.Values.Count}");
+Console.WriteLine($"Commands: {deployment.Commands.Count}");
 Console.WriteLine($"Dry run: {deployment.DryRun}");
-Console.Write("Press enter to confirm");
+Console.Write("Press enter to confirm: ");
 Console.ReadLine();
 
 deployment.Validate();
@@ -77,10 +73,6 @@ foreach(var cmd in deployment.Commands){
         throw new InvalidOperationException($"Couldn't create process: {psi.FileName} {psi.Arguments}");
 
     await process.WaitForExitAsync();
-    // var output = await process.StandardOutput.ReadToEndAsync();
-    // var err = await process.StandardError.ReadToEndAsync();
-    // Console.WriteLine("Output: " + output);
-    // Console.WriteLine("Error: " + err);
 
     Console.WriteLine();
 }
